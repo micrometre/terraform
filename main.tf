@@ -131,9 +131,16 @@ resource "null_resource" "vm_config" {
       <source network='default'/>
       <model type='virtio'/>
     </interface>
+    <serial type='pty'>
+      <target port='0'/>
+    </serial>
     <console type='pty'>
       <target type='serial' port='0'/>
     </console>
+    <graphics type='spice' autoport='yes'/>
+    <video>
+      <model type='qxl'/>
+    </video>
     <memballoon model='virtio'/>
   </devices>
 </domain>

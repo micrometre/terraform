@@ -56,7 +56,9 @@ vm-stop: ## Stop VM
 	sudo virsh shutdown terraform-vm
 
 vm-console: ## Try to connect to VM console (may not work)
-	@echo "Trying VM console (may fail due to missing console device)..."
+	@echo "Connecting to VM console..."
+	@echo "💡 Use Ctrl+] to exit console"
+	@echo "💡 If console doesn't show prompt, press Enter or try 'sudo virsh destroy terraform-vm && sudo virsh start terraform-vm'"
 	sudo virsh console terraform-vm
 
 vm-ip: ## Get VM IP address

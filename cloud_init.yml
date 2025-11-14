@@ -32,6 +32,12 @@ runcmd:
   - systemctl start qemu-guest-agent
   - systemctl enable ssh
   - systemctl start ssh
+  # Enable console login
+  - systemctl enable serial-getty@ttyS0.service
+  - systemctl start serial-getty@ttyS0.service
+  # Configure kernel console
+  - sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="console=tty0 console=ttyS0,115200n8"/' /etc/default/grub
+  - update-grub
 # Set timezone UK London
 timezone: Europe/London
 
