@@ -1,0 +1,198 @@
+# Makefile for Terraform libvirt project
+# Usage: make <target>
+
+.PHONY: help init validate plan apply destroy clean fmt check status
+
+# Default target
+help: ## Show this help message
+	@echo "Available targets:"
+	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+init: ## Initialize Terraform (download providers)
+	terraform init
+
+validate: ## Validate Terraform configuration
+	terraform validate
+
+fmt: ## Format Terraform files
+	terraform fmt
+
+plan: validate ## Create Terraform execution plan
+	terraform plan
+
+plan-save: validate ## Create and save Terraform execution plan
+	terraform plan -out=terraform.plan
+
+apply: validate ## Apply Terraform configuration (with confirmation)
+	terraform apply
+
+apply-plan: ## Apply a saved Terraform plan (safer for production)
+	@if [ ! -f terraform.plan ]; then \
+		echo "❌ No saved plan found. Run 'make plan-save' first."; \
+		exit 1; \
+	fi
+	terraform apply terraform.plan
+	rm -f terraform.plan
+
+apply-auto: validate ## Apply Terraform configuration (auto-approve, no confirmation)
+	terraform apply -auto-approve
+
+destroy: ## Destroy Terraform-managed infrastructure (with confirmation)
+	terraform destroy
+
+destroy-auto: ## Destroy Terraform-managed infrastructure (auto-approve, no confirmation)
+	terraform destroy -auto-approve
+
+status: ## Show current Terraform state
+	terraform show
+
+output: ## Show Terraform outputs
+	terraform output
+
+check: fmt validate ## Run formatting and validation checks
+
+clean: ## Clean up Terraform files (except state)
+	rm -rf .terraform/
+	rm -f .terraform.lock.hcl
+	rm -f terraform.plan
+
+clean-all: clean ## Clean up all Terraform files including state (DANGEROUS!)
+	@echo "WARNING: This will remove terraform.tfstate files!"
+	@read -p "Are you sure? (y/N): " confirm && [ "$$confirm" = "y" ]
+	rm -f terraform.tfstate*
+
+purge: ## Complete purge: destroy infrastructure, clean libvirt resources, and remove all files (NUCLEAR OPTION!)
+	@echo "🚨 NUCLEAR PURGE WARNING 🚨"
+	@echo "This will:"
+	@echo "  - Destroy all Terraform-managed infrastructure"
+	@echo "  - Remove all libvirt VMs, volumes, and networks"
+	@echo "  - Delete all Terraform state and cache files"
+	@echo "  - Clean up all temporary files"
+	@echo ""
+	@read -p "Type 'PURGE' to confirm complete destruction: " confirm && [ "$$confirm" = "PURGE" ]
+	@echo ""
+	@echo "🔥 Starting complete purge..."
+	@echo "1. Destroying Terraform infrastructure..."
+	-terraform destroy -auto-approve 2>/dev/null || echo "   Terraform destroy failed or nothing to destroy"
+	@echo "2. Stopping any running VMs..."
+	-sudo virsh shutdown terraform-vm 2>/dev/null || true
+	@sleep 5
+	@echo "3. Removing libvirt domains..."
+	-sudo virsh undefine terraform-vm 2>/dev/null || true
+	@echo "4. Removing libvirt volumes..."
+	-sudo virsh vol-delete terraform-vm-disk.qcow2 --pool default 2>/dev/null || true
+	-sudo virsh vol-delete ubuntu-24.04-base.qcow2 --pool default 2>/dev/null || true
+	-sudo virsh vol-delete commoninit.iso --pool default 2>/dev/null || true
+	-sudo virsh vol-delete terraform-vm-cloudinit.iso --pool default 2>/dev/null || true
+	@echo "5. Cleaning Terraform files..."
+	-rm -rf .terraform/
+	-rm -f .terraform.lock.hcl
+	-rm -f terraform.plan
+	-rm -f terraform.tfstate*
+	@echo "6. Removing test artifacts..."
+	-rm -f test_results.log
+	@echo ""
+	@echo "🔥 PURGE COMPLETE! 🔥"
+	@echo "Everything has been destroyed and cleaned up."
+	@echo "You can start fresh with: make init"
+
+purge-dry-run: ## Show what would be purged without actually doing it
+	@echo "🔍 PURGE DRY RUN - Nothing will be deleted"
+	@echo ""
+	@echo "Would destroy the following Terraform resources:"
+	@terraform state list 2>/dev/null || echo "  No Terraform resources found"
+	@echo ""
+	@echo "Would remove the following libvirt resources:"
+	@echo "VMs:"
+	@sudo virsh list --all | grep terraform-vm || echo "  No terraform VMs found"
+	@echo "Volumes:"
+	@sudo virsh vol-list default 2>/dev/null | grep -E "(terraform|ubuntu)" || echo "  No terraform volumes found"
+	@echo ""
+	@echo "Would clean the following files:"
+	@find . -name "terraform.tfstate*" -o -name ".terraform" -o -name "*.plan" 2>/dev/null || echo "  No terraform files found"
+	@echo ""
+	@echo "To actually purge everything, run: make purge"
+
+# Workflow targets
+setup: init validate ## Initial setup: init and validate
+	@echo "✅ Terraform setup complete"
+
+deploy: setup plan apply ## Full deployment workflow: setup, plan, apply
+	@echo "✅ Deployment complete"
+
+deploy-safe: setup plan-save apply-plan ## Safe deployment workflow: setup, save plan, apply plan
+	@echo "✅ Safe deployment complete"
+
+quick-deploy: setup apply-auto ## Quick deployment: setup and auto-apply
+	@echo "✅ Quick deployment complete"
+
+# Development targets
+dev-cycle: fmt validate plan ## Development cycle: format, validate, plan
+	@echo "✅ Development cycle complete"
+
+dev-cycle-save: fmt validate plan-save ## Development cycle with saved plan: format, validate, save plan
+	@echo "✅ Development cycle complete (plan saved to terraform.plan)"
+	@echo "To apply: make apply-plan"
+
+replace-volume: ## Force replacement of VM disk volume (when backing store changes)
+	terraform apply -replace="libvirt_volume.vm_disk"
+
+replace-all-volumes: ## Force replacement of all volumes (use with caution)
+	terraform apply -replace="libvirt_volume.vm_disk" -replace="libvirt_volume.ubuntu_base"
+
+clean-libvirt: ## Clean up orphaned libvirt resources (DANGEROUS!)
+	@echo "⚠️  WARNING: This will remove libvirt resources not managed by Terraform!"
+	@read -p "Are you sure? (y/N): " confirm && [ "$$confirm" = "y" ]
+	@echo "Removing orphaned libvirt resources..."
+	-sudo virsh undefine terraform-vm 2>/dev/null || true
+	-sudo virsh vol-delete ubuntu-24.04-base.qcow2 --pool default 2>/dev/null || true
+	-sudo virsh vol-delete terraform-vm-disk.qcow2 --pool default 2>/dev/null || true
+	@echo "✅ Cleanup complete. You can now run 'terraform apply'"
+
+test-vm: apply ## Deploy and run VM tests
+	@echo "✅ VM deployment and testing complete"
+
+test-vm-enhanced: ## Run enhanced VM testing script
+	./test_vm.sh
+
+start-vm: ## Start the VM if it's shut off
+	sudo virsh start terraform-vm
+
+stop-vm: ## Shutdown the VM gracefully  
+	sudo virsh shutdown terraform-vm
+
+vm-console: ## Connect to VM console
+	sudo virsh console terraform-vm
+
+check-kvm: ## Check KVM setup and permissions
+	@echo "=== KVM Setup Check ==="
+	@echo "1. Checking KVM modules:"
+	@lsmod | grep kvm || echo "   ❌ KVM modules not loaded"
+	@echo ""
+	@echo "2. Checking /dev/kvm:"
+	@ls -la /dev/kvm 2>/dev/null || echo "   ❌ /dev/kvm not found"
+	@echo ""
+	@echo "3. Checking user groups:"
+	@groups | grep -E "(kvm|libvirt)" || echo "   ❌ User not in kvm/libvirt groups"
+	@echo ""
+	@echo "4. Checking libvirtd status:"
+	@sudo systemctl is-active libvirtd || echo "   ❌ libvirtd not running"
+	@echo ""
+	@echo "If any checks failed, see README.md for setup instructions"
+
+# VM management targets
+vm-status: ## Check VM status using virsh
+	sudo virsh list --all
+
+vm-info: ## Get VM information (requires VM name)
+	@read -p "Enter VM name: " vm_name && sudo virsh dominfo "$$vm_name"
+
+# Safety checks
+pre-apply: fmt validate plan ## Pre-apply safety checks
+	@echo "✅ Pre-apply checks passed. Ready for 'make apply'"
+
+pre-destroy: ## Pre-destroy safety checks
+	@echo "⚠️  WARNING: This will destroy your infrastructure!"
+	@echo "Current resources:"
+	@terraform show 2>/dev/null || echo "No resources found"
+	@echo "Ready for 'make destroy' if you're sure"

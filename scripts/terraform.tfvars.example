@@ -1,0 +1,20 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and customize as needed
+
+# vm_memory = 4096
+# vm_vcpu = 4
+# vm_name = "my-custom-vm"
+# network_cidr = "192.168.200.0/24"
+
+# Enable or disable VM testing provisioner
+# enable_vm_tests = true
+
+# Ubuntu image options:
+# Ubuntu 24.04 LTS (default)
+# base_image_url = "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img"
+
+# Ubuntu 22.04 LTS
+# base_image_url = "https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img"
+
+# Ubuntu 20.04 LTS
+# base_image_url = "https://cloud-images.ubuntu.com/releases/20.04/release/ubuntu-20.04-server-cloudimg-amd64.img"

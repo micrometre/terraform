@@ -1,0 +1,61 @@
+# Extended example showing how to add more functionality
+# This file is for reference - copy sections to main.tf as needed
+
+# Example: Custom network (uncomment and modify as needed)
+# resource "libvirt_network" "vm_network" {
+#   name = "vm_network" 
+#   mode = "nat"
+#   bridge = "virbr1"
+#   autostart = true
+# }
+
+# Example: Custom storage pool (uncomment and modify as needed)
+# resource "libvirt_pool" "vm_pool" {
+#   name = "vm_pool"
+#   type = "dir"
+#   target {
+#     path = "/var/lib/libvirt/images/terraform"
+#   }
+# }
+
+# Example: Volume with specific size (uncomment and modify as needed)
+# resource "libvirt_volume" "vm_disk" {
+#   name   = "${var.vm_name}-disk.qcow2"
+#   pool   = "default" # or libvirt_pool.vm_pool.name for custom pool
+#   format = "qcow2"
+#   size   = var.vm_disk_size  # Note: size may not work in all provider versions
+# }
+
+# Example: More complete VM domain configuration (uncomment and modify as needed)
+# resource "libvirt_domain" "vm" {
+#   name   = var.vm_name
+#   memory = var.vm_memory
+#   vcpu   = var.vm_vcpu
+#   
+#   cloudinit = libvirt_cloudinit_disk.commoninit.id  # May not work in all versions
+#   
+#   network_interface {  # May not work in all versions
+#     network_name = "default"
+#     wait_for_lease = true
+#   }
+#   
+#   disk {  # May not work in all versions
+#     volume_id = libvirt_volume.vm_disk.id
+#   }
+#   
+#   console {  # May not work in all versions
+#     type        = "pty"
+#     target_port = "0"
+#     target_type = "serial"
+#   }
+#
+#   graphics {  # May not work in all versions
+#     type        = "spice"
+#     listen_type = "address"
+#     autoport    = true
+#   }
+# }
+
+# Note: The above blocks may not work with all versions of the libvirt provider
+# The minimal example in main.tf uses only the attributes that are guaranteed to work
+# Always test with `terraform validate` and `terraform plan` before applying
