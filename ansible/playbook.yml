@@ -1,0 +1,121 @@
+---
+# Minimal Ansible playbook for VM configuration
+# This playbook runs after Terraform creates the VM and cloud-init completes
+
+- name: Configure Ubuntu 24.04 VM
+  hosts: vm
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    packages_to_install:
+      - htop
+      - tree
+      - neofetch
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin  # Modern Docker Compose v2 as a plugin
+    
+    services_to_enable:
+      - ssh
+      - qemu-guest-agent
+      - docker
+
+  tasks:
+    - name: Wait for VM to be ready
+      wait_for_connection:
+        connect_timeout: 20
+        sleep: 5
+        delay: 10
+        timeout: 300
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install prerequisites for Docker repository
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Update apt cache after adding Docker repo
+      apt:
+        update_cache: yes
+
+    - name: Install additional packages
+      apt:
+        name: "{{ packages_to_install }}"
+        state: present
+
+    - name: Enable and start services
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+      loop: "{{ services_to_enable }}"
+      ignore_errors: yes
+
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Verify Docker installation
+      command: docker --version
+      register: docker_version
+      become: no
+
+    - name: Verify Docker Compose plugin
+      command: docker compose version
+      register: docker_compose_version
+      become: no
+      
+    - name: Display Docker versions
+      debug:
+        msg:
+          - "{{ docker_version.stdout }}"
+          - "{{ docker_compose_version.stdout }}"
+
+    - name: Create a test file
+      copy:
+        content: |
+          VM configured with Ansible on {{ ansible_date_time.iso8601 }}
+          Hostname: {{ ansible_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Kernel: {{ ansible_kernel }}
+          Architecture: {{ ansible_architecture }}
+          Docker: {{ docker_version.stdout }}
+          Docker Compose: {{ docker_compose_version.stdout }}
+        dest: /home/ubuntu/ansible-configured.txt
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Display system information
+      debug:
+        msg:
+          - "VM successfully configured!"
+          - "Hostname: {{ ansible_hostname }}"
+          - "IP Address: {{ ansible_default_ipv4.address }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Packages installed: {{ packages_to_install | join(', ') }}"
+          - "Docker: {{ docker_version.stdout }}"
+          - "Docker Compose: {{ docker_compose_version.stdout }}"
+          - "Note: Use 'docker compose' (not 'docker-compose') for modern Docker Compose v2"

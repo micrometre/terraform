@@ -98,3 +98,18 @@ vm-xml: ## Show VM XML configuration
 
 test: ## Test VM
 	./test_vm.sh
+
+ansible-ping: ## Test Ansible connectivity to VM
+	@echo "Testing Ansible connection to VM..."
+	cd ansible && ansible vm -m ping
+
+ansible-run: ## Run Ansible playbook manually
+	@echo "Running Ansible playbook..."
+	cd ansible && ansible-playbook playbook.yml -v
+
+ansible-info: ## Show Ansible inventory and VM info  
+	@echo "=== Ansible Inventory ==="
+	@cat ansible/inventory.ini 2>/dev/null || echo "No inventory file found"
+	@echo ""
+	@echo "=== VM Facts ==="
+	@cd ansible && ansible vm -m setup 2>/dev/null || echo "Could not gather facts"

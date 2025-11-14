@@ -54,10 +54,74 @@ This configuration successfully provides:
 
 ## Configuration Files
 
-- `main.tf`: Main Terraform configuration defining the VM infrastructure
-- `cloud_init.yml`: Cloud-init configuration for VM initialization
-- `variables.tf`: Variable definitions (optional)
-- `terraform.tfvars`: Variable values (optional)
+## Files
+
+**Terraform Configuration:**
+- `main.tf` - Main orchestration and documentation
+- `providers.tf` - Provider configuration (libvirt, null)
+- `variables.tf` - Configuration variables and defaults
+- `outputs.tf` - Output values (VM info, access commands)
+- `volumes.tf` - Storage volumes (base image + VM disk)
+- `vm.tf` - VM domain and cloud-init configuration
+- `provisioners.tf` - Post-creation configuration and testing
+
+**Ansible Configuration:**
+- `ansible/playbook.yml` - Ansible playbook for VM configuration
+- `ansible/inventory.tpl` - Ansible inventory template
+- `ansible/ansible.cfg` - Ansible configuration
+- `ansible/inventory.ini` - Generated inventory (created by Terraform)
+
+**Configuration Files:**
+- `cloud_init.yml` - Cloud-init configuration for VM setup
+- `Makefile` - Automation commands
+
+## Architecture
+
+**Modular File Structure:**
+```
+terraform/
+├── main.tf              # 📋 Main orchestration (minimal)
+├── providers.tf         # 🔌 Provider configuration  
+├── variables.tf         # ⚙️  Input variables
+├── outputs.tf           # 📤 Output values
+├── volumes.tf           # 💾 Storage volumes
+├── vm.tf               # 🖥️  VM domain & cloud-init
+├── provisioners.tf     # 🔧 Post-creation config + Ansible
+├── cloud_init.yml       # ☁️  VM initialization
+├── Makefile            # 🤖 Automation commands
+└── ansible/            # 🎭 Ansible configuration
+    ├── playbook.yml     #    VM configuration tasks
+    ├── inventory.tpl    #    Inventory template
+    ├── ansible.cfg      #    Ansible settings
+    └── inventory.ini    #    Generated inventory
+```
+
+**Benefits of This Structure:**
+- 🎯 **Separation of Concerns**: Each file has a single responsibility
+- 📖 **Readability**: Easy to find and understand specific components
+- 🔧 **Maintainability**: Changes are isolated to relevant files
+- 🔄 **Reusability**: Components can be easily modified or replaced
+- 🧪 **Testing**: Easier to test individual components
+- 🎭 **Ansible Integration**: Automated post-deployment configuration
+
+**Ansible Playbook Features:**
+- 📦 **Package Management**: Installs additional software (htop, docker, docker-compose-plugin, etc.)
+- 🔧 **Service Management**: Enables and starts required services  
+- 👤 **User Configuration**: Adds ubuntu user to docker group
+- 📁 **File Management**: Creates configuration files and status indicators
+- ✅ **Verification**: Tests Docker and Docker Compose installations
+- ℹ️ **System Information**: Displays VM details and configuration status
+
+## Network Topology
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Host System   │    │  libvirt/KVM     │    │  Ubuntu 24.04   │
+│                 │◄──►│                  │◄──►│                 │
+│  terraform      │    │  virbr0 bridge   │    │  192.168.122.x  │ 
+│  make commands  │    │  NAT networking  │    │  SSH + Console  │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+```
 
 ## What this example creates
 
@@ -75,8 +139,10 @@ This configuration successfully provides:
 - **CPU**: 2 vCPUs (host-model for best performance)
 - **Storage**: 20GB disk (thin provisioned with backing store)
 - **Network**: virtio interface on default libvirt network (192.168.122.0/24)
-- **SSH**: Enabled with your SSH key, passwordless login as 'ubuntu' user
-- **Packages**: qemu-guest-agent, openssh-server, curl, wget, vim, git
+- **Console**: Serial console + SPICE graphics for direct VM access
+✅ **SSH**: Enabled with your SSH key, passwordless login as 'ubuntu' user
+✅ **Ansible**: Automated configuration management with minimal playbook
+✅ **Packages**: qemu-guest-agent, openssh-server, curl, wget, vim, git, htop, docker, docker-compose-plugin
 - **Services**: SSH and qemu-guest-agent auto-started
 - **Console**: Serial console configured (though SSH is the primary access method)
 
@@ -97,6 +163,15 @@ make vm-ping
 
 # SSH into VM (working: immediate connection)  
 make vm-ssh
+
+# Connect to VM console (for troubleshooting/direct access)
+make vm-console
+
+# Test Ansible connectivity
+make ansible-ping
+
+# Run Ansible playbook manually
+make ansible-run
 
 # Stop/start VM
 make vm-stop

@@ -45,3 +45,15 @@ variable "vm_static_ip" {
   type        = string
   default     = "192.168.122.10"
 }
+
+variable "enable_ansible" {
+  description = "Enable Ansible provisioning"
+  type        = bool
+  default     = true
+}
+
+variable "ansible_user" {
+  description = "User for Ansible SSH connection"
+  type        = string
+  default     = "ubuntu"
+}

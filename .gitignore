@@ -5,6 +5,10 @@
 .terraform/
 terraform.plan
 
+# Ansible generated files
+ansible/inventory.ini
+ansible/*.retry
+
 # Backup files
 *.backup
 *~
