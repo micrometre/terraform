@@ -1,18 +1,15 @@
-# Post-creation VM configuration and testing
-
-# Post-creation configuration to add network and disk
+# VM creation and configuration
 resource "null_resource" "vm_config" {
   depends_on = [
-    libvirt_domain.vm,
     libvirt_volume.vm_disk,
     libvirt_cloudinit_disk.commoninit
   ]
 
-  # Trigger re-configuration when VM or volumes change
+  # Trigger re-configuration when volumes change
   triggers = {
-    vm_id        = libvirt_domain.vm.id
     disk_id      = libvirt_volume.vm_disk.id
     cloudinit_id = libvirt_cloudinit_disk.commoninit.id
+    vm_name      = var.vm_name
   }
 
   provisioner "local-exec" {
@@ -71,6 +68,10 @@ resource "null_resource" "vm_config" {
     <console type='pty'>
       <target type='serial' port='0'/>
     </console>
+    <channel type='unix'>
+      <source mode='bind'/>
+      <target type='virtio' name='org.qemu.guest_agent.0'/>
+    </channel>
     <graphics type='spice' autoport='yes'/>
     <video>
       <model type='qxl'/>
@@ -112,18 +113,18 @@ EOF
 # Test provisioner to verify VM functionality
 resource "null_resource" "vm_test" {
   count      = var.enable_vm_tests ? 1 : 0
-  depends_on = [libvirt_domain.vm]
+  depends_on = [null_resource.vm_config]
 
-  # Trigger re-provisioning when VM changes
+  # Trigger re-provisioning when VM config changes
   triggers = {
-    vm_id = libvirt_domain.vm.id
+    vm_config_id = null_resource.vm_config.id
   }
 
   provisioner "local-exec" {
     command = <<-EOT
       echo "=== VM Test Results ==="
       echo "VM Name: ${var.vm_name}"
-      echo "VM ID: ${libvirt_domain.vm.id}"
+      echo "VM managed by null_resource"
       echo ""
       echo "Waiting for VM to be ready..."
       sleep 10
@@ -153,14 +154,14 @@ resource "null_resource" "vm_test" {
 # Ansible provisioner for advanced VM configuration
 resource "null_resource" "ansible_provisioner" {
   count = var.enable_ansible ? 1 : 0
-  
+
   depends_on = [
     null_resource.vm_config
   ]
 
-  # Trigger re-provisioning when VM changes
+  # Trigger re-provisioning when VM config changes
   triggers = {
-    vm_id = libvirt_domain.vm.id
+    vm_config_id      = null_resource.vm_config.id
     playbook_checksum = filemd5("${path.module}/ansible/playbook.yml")
   }
 

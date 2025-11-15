@@ -1,0 +1,59 @@
+---
+- name: Check if Go is already installed
+  command: "which go"
+  register: go_binary
+  ignore_errors: true
+  changed_when: false
+  check_mode: no
+
+- name: Check installed Go version
+  command: "go version"
+  register: go_version_result
+  ignore_errors: true
+  changed_when: false
+  check_mode: no
+  when: not go_binary.failed
+
+- name: Set Go installation facts
+  set_fact:
+    go_download_url: "https://go.dev/dl/go{{ go_version }}.{{ go_os }}-{{ go_arch }}.tar.gz"
+    go_checksum_url: "https://go.dev/dl/go{{ go_version }}.{{ go_os }}-{{ go_arch }}.tar.gz.sha256"
+    go_download_path: "/tmp/go{{ go_version }}.{{ go_os }}-{{ go_arch }}.tar.gz"
+  when: go_binary.failed or go_download_force or (go_version_result.stdout is not defined) or (go_version_result.stdout is defined and go_version not in go_version_result.stdout)
+
+- name: Ensure necessary packages are installed
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - wget
+    - tar
+  become: true
+
+- name: Download Go
+  get_url:
+    url: "{{ go_download_url }}"
+    dest: "{{ go_download_path }}"
+  when: go_binary.failed or go_download_force or (go_version_result.stdout is not defined) or (go_version_result.stdout is defined and go_version not in go_version_result.stdout)
+
+- name: Remove existing Go installation
+  file:
+    path: "{{ go_install_dir }}/go"
+    state: absent
+  become: true
+  when: go_binary.failed or go_download_force or (go_version_result.stdout is defined and go_version not in go_version_result.stdout)
+
+- name: Install Go
+  unarchive:
+    src: "{{ go_download_path }}"
+    dest: "{{ go_install_dir }}"
+    remote_src: yes
+  become: true
+  when: go_binary.failed or go_download_force or (go_version_result.stdout is defined and go_version not in go_version_result.stdout)
+  notify: cleanup go archive
+
+- name: Add Go to to system-wide $PATH.
+  copy:
+    dest: /etc/profile.d/go-path.sh
+    content: |-
+      export PATH=$PATH:/usr/local/go/bin

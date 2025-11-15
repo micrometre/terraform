@@ -103,9 +103,17 @@ ansible-ping: ## Test Ansible connectivity to VM
 	@echo "Testing Ansible connection to VM..."
 	cd ansible && ansible vm -m ping
 
-ansible-run: ## Run Ansible playbook manually
-	@echo "Running Ansible playbook..."
+ansible-run: ## Run Ansible playbook with roles
+	@echo "Running Ansible playbook with roles..."
 	cd ansible && ansible-playbook playbook.yml -v
+
+ansible-roles-tags: ## Run specific role tags (usage: make ansible-roles-tags TAGS=golang,docker)
+	@echo "Running Ansible playbook with tags: $(TAGS)"
+	cd ansible && ansible-playbook playbook.yml -v --tags "$(TAGS)"
+
+ansible-docker: ## Run only Docker role configuration
+	@echo "Running Docker role configuration only..."
+	cd ansible && ansible-playbook playbook.yml -v --tags "docker"
 
 ansible-info: ## Show Ansible inventory and VM info  
 	@echo "=== Ansible Inventory ==="

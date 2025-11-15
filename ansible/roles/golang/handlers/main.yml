@@ -1,0 +1,5 @@
+---
+- name: cleanup go archive
+  file:
+    path: "{{ go_download_path }}"
+    state: absent

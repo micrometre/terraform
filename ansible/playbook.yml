@@ -1,67 +1,91 @@
 ---
-# Minimal Ansible playbook for VM configuration
+# Enhanced Ansible playbook using roles for VM configuration
 # This playbook runs after Terraform creates the VM and cloud-init completes
 
-- name: Configure Ubuntu 24.04 VM
+- name: Configure Ubuntu 24.04 VM with Roles
   hosts: vm
   become: yes
   gather_facts: yes
   
   vars:
-    packages_to_install:
+    # Additional packages for monitoring and utilities
+    extra_packages:
       - htop
       - tree
       - neofetch
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
-      - docker-compose-plugin  # Modern Docker Compose v2 as a plugin
+      - tmux
+      - screen
     
     services_to_enable:
       - ssh
       - qemu-guest-agent
-      - docker
+    
+    # Override users role variables if needed
+    create_users:
+      - ubuntu
+      - devops  # Additional user for demonstration
+    
+    # Override Go version if needed
+    go_version: "1.23.3"  # Use a stable version
+    
+    # Docker role configuration
+    docker_users:
+      - ubuntu
+      - devops
+    docker_install_compose_plugin: true
+    docker_daemon_options:
+      log-driver: "json-file"
+      log-opts:
+        max-size: "10m"
+        max-file: "3"
 
-  tasks:
+  pre_tasks:
     - name: Wait for VM to be ready
       wait_for_connection:
         connect_timeout: 20
         sleep: 5
         delay: 10
         timeout: 300
+    
+    # Clean up any conflicting Docker repositories before applying docker role
+    - name: Clean up conflicting Docker repository files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/docker.list
+        - /etc/apt/sources.list.d/download_docker_com_linux_ubuntu.list
+      tags: docker
+      when: install_docker | default(true)
 
-    - name: Update apt cache
+    - name: Update apt cache after cleanup
       apt:
         update_cache: yes
-        cache_valid_time: 3600
+      tags: docker
+      when: install_docker | default(true)
 
-    - name: Install prerequisites for Docker repository
+  roles:
+    - role: common
+      tags: common
+    
+    - role: users
+      tags: users
+      when: manage_users | default(true)
+    
+    - role: golang
+      tags: golang
+      when: install_golang | default(true)
+      
+    - role: docker
+      tags: docker
+      when: install_docker | default(true)
+
+  tasks:
+    - name: Install extra utility packages
       apt:
-        name:
-          - ca-certificates
-          - curl
-          - gnupg
-          - lsb-release
+        name: "{{ extra_packages }}"
         state: present
-
-    - name: Add Docker GPG key
-      apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
-
-    - name: Add Docker repository
-      apt_repository:
-        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-        state: present
-
-    - name: Update apt cache after adding Docker repo
-      apt:
-        update_cache: yes
-
-    - name: Install additional packages
-      apt:
-        name: "{{ packages_to_install }}"
-        state: present
+      tags: packages
 
     - name: Enable and start services
       systemd:
@@ -70,52 +94,137 @@
         state: started
       loop: "{{ services_to_enable }}"
       ignore_errors: yes
+      tags: services
+      when: item != 'qemu-guest-agent'  # Handle qemu-guest-agent separately
 
-    - name: Add ubuntu user to docker group
-      user:
-        name: ubuntu
-        groups: docker
-        append: yes
+    - name: Handle qemu-guest-agent installation and service (optional)
+      block:
+        - name: Install qemu-guest-agent package
+          apt:
+            name: qemu-guest-agent
+            state: present
+            update_cache: yes
 
+        - name: Check if virtio-serial devices exist
+          stat:
+            path: /dev/virtio-ports/org.qemu.guest_agent.0
+          register: virtio_device
+
+        - name: Enable qemu-guest-agent service only if virtio device exists
+          systemd:
+            name: qemu-guest-agent
+            enabled: yes
+            state: started
+          when: virtio_device.stat.exists
+
+        - name: Log qemu-guest-agent status
+          debug:
+            msg: |
+              qemu-guest-agent status:
+              - Package installed: yes
+              - Virtio device exists: {{ virtio_device.stat.exists }}
+              - Service will be {{ 'started' if virtio_device.stat.exists else 'skipped (no virtio channel)' }}
+      rescue:
+        - name: Log qemu-guest-agent setup failure
+          debug:
+            msg: |
+              Warning: qemu-guest-agent could not be fully configured.
+              This is common in virtualized environments without proper virtio channels.
+              VM functionality is not affected.
+      tags: services
+
+    # Verification tasks
     - name: Verify Docker installation
       command: docker --version
       register: docker_version
       become: no
+      tags: verify
 
     - name: Verify Docker Compose plugin
       command: docker compose version
       register: docker_compose_version
       become: no
+      tags: verify
       
-    - name: Display Docker versions
+    - name: Verify Go installation
+      shell: |
+        if [ -f /etc/profile.d/go-path.sh ]; then
+          . /etc/profile.d/go-path.sh
+          go version
+        else
+          echo "Go not installed or profile script missing"
+        fi
+      register: go_version_output
+      become: no
+      ignore_errors: yes
+      tags: verify
+
+    - name: Display versions
       debug:
         msg:
-          - "{{ docker_version.stdout }}"
-          - "{{ docker_compose_version.stdout }}"
+          - "Docker: {{ docker_version.stdout }}"
+          - "Docker Compose: {{ docker_compose_version.stdout }}"
+          - "Go: {{ go_version_output.stdout | default('Not installed or not in PATH') }}"
+      tags: verify
 
-    - name: Create a test file
+    # Create comprehensive status file
+    - name: Create detailed configuration status file
       copy:
         content: |
-          VM configured with Ansible on {{ ansible_date_time.iso8601 }}
+          # VM Configuration Summary
+          Configured with Ansible roles on {{ ansible_date_time.iso8601 }}
+          
+          ## System Information
           Hostname: {{ ansible_hostname }}
           OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
           Kernel: {{ ansible_kernel }}
           Architecture: {{ ansible_architecture }}
+          IP Address: {{ ansible_default_ipv4.address }}
+          
+          ## Installed Software
           Docker: {{ docker_version.stdout }}
           Docker Compose: {{ docker_compose_version.stdout }}
-        dest: /home/ubuntu/ansible-configured.txt
+          Go: {{ go_version_output.stdout | default('Not installed or not in PATH') }}
+          
+          ## Roles Applied
+          - common: System packages and Python tools
+          - users: User management and SSH configuration
+          - golang: Go programming language installation
+          - docker: Docker CE with modern compose plugin
+          
+          ## Additional Packages
+          {{ extra_packages | join(', ') }}
+          
+          ## Services Enabled
+          {{ services_to_enable | join(', ') }}, docker (via docker role)
+          
+          ## Docker Configuration
+          - Users with Docker access: {{ docker_users | join(', ') }}
+          - Logging configured with rotation
+          - Modern Docker Compose v2 plugin installed
+          
+          ## Notes
+          - Use 'docker compose' (not 'docker-compose') for modern Docker Compose v2
+          - Go environment variables are set in /etc/profile.d/go-path.sh
+          - Docker daemon configured with log rotation
+          - SSH connection reset applied for user group changes
+        dest: /home/ubuntu/ansible-roles-configured.txt
         owner: ubuntu
         group: ubuntu
         mode: '0644'
+      tags: documentation
 
-    - name: Display system information
+    - name: Display final system information
       debug:
         msg:
-          - "VM successfully configured!"
+          - "✅ VM successfully configured with roles!"
           - "Hostname: {{ ansible_hostname }}"
           - "IP Address: {{ ansible_default_ipv4.address }}"
           - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
-          - "Packages installed: {{ packages_to_install | join(', ') }}"
+          - "Roles applied: common, users, golang, docker"
           - "Docker: {{ docker_version.stdout }}"
           - "Docker Compose: {{ docker_compose_version.stdout }}"
-          - "Note: Use 'docker compose' (not 'docker-compose') for modern Docker Compose v2"
+          - "Go: {{ go_version_output.stdout | default('Installation may require re-login for PATH') }}"
+          - ""
+          - "📋 Configuration details saved to: /home/ubuntu/ansible-roles-configured.txt"
+      tags: summary

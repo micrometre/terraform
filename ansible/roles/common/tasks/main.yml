@@ -1,0 +1,17 @@
+- name: Update and upgrade System.
+  apt: name=aptitude update_cache=yes state=present force_apt_get=yes
+
+- name: Update apt.
+  apt: update_cache=yes force_apt_get=yes
+
+- name: Upgrade all apt packages.
+  apt: upgrade=dist force_apt_get=yes
+
+- name: Install required system packages
+  apt: name={{ sys_packages }} state=present
+
+- name: Install python3 packages
+  apt: name={{ python3_packages }} state=present
+
+
+

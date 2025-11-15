@@ -10,13 +10,5 @@ resource "libvirt_cloudinit_disk" "commoninit" {
   meta_data = ""
 }
 
-# Create the VM domain with Ubuntu 24.04
-resource "libvirt_domain" "vm" {
-  name   = var.vm_name
-  memory = var.vm_memory
-  vcpu   = var.vm_vcpu
-
-  os = {
-    type = "hvm"
-  }
-}
+# VM creation is handled entirely by the null_resource provisioner
+# This approach bypasses Terraform libvirt provider syntax issues

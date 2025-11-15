@@ -1,0 +1,66 @@
+---
+# Group variables for all VMs
+# Override role defaults and configure role behavior
+
+# Control which roles to apply
+manage_users: true
+install_golang: true
+install_docker: true
+
+# User management configuration
+create_users:
+  - ubuntu
+  - devops
+
+# Go configuration
+go_version: "1.23.3"
+go_install_dir: "/usr/local"
+
+# Docker role configuration
+docker_users:
+  - ubuntu
+  - devops
+docker_install_compose_plugin: true
+docker_edition: 'ce'
+docker_daemon_options:
+  log-driver: "json-file"
+  log-opts:
+    max-size: "10m"
+    max-file: "3"
+  storage-driver: "overlay2"
+
+# System packages from common role (extending defaults)
+sys_packages:
+  - "curl"
+  - "build-essential" 
+  - "make"
+  - "aptitude"
+  - "openssh-server"
+  - "apt-transport-https"
+  - "ca-certificates"
+  - "gnupg2"
+  - "software-properties-common"
+  - "ffmpeg"
+  - "git"
+  - "vim"
+  - "nano"
+  - "wget"
+  - "unzip"
+  - "jq"
+  - "qemu-guest-agent"
+
+# Python packages
+python3_packages:
+  - 'python3-pip'
+  - 'python3-venv' 
+  - 'python3-dev'
+  - 'python3-setuptools'
+  - 'python3-passlib'
+  - 'python3-yaml'
+
+# Services to enable (qemu-guest-agent handled separately in playbook)
+services_to_enable:
+  - ssh
+
+# SSH configuration for users role
+copy_local_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"

@@ -1,13 +1,13 @@
 # Output values
 
 output "vm_name" {
-  value       = libvirt_domain.vm.name
+  value       = var.vm_name
   description = "Name of the VM"
 }
 
 output "vm_id" {
-  value       = libvirt_domain.vm.id
-  description = "ID of the VM domain"
+  value       = "VM managed by null_resource - use 'sudo virsh list --all' to see status"
+  description = "VM status information"
 }
 
 output "vm_ip" {
@@ -16,12 +16,12 @@ output "vm_ip" {
 }
 
 output "vm_mac" {
-  value       = "Use 'sudo virsh domiflist ${libvirt_domain.vm.name}' to get actual MAC address"
+  value       = "Use 'sudo virsh domiflist ${var.vm_name}' to get actual MAC address"
   description = "Command to get VM MAC address"
 }
 
 output "console_access" {
-  value       = "sudo virsh console ${libvirt_domain.vm.name}"
+  value       = "sudo virsh console ${var.vm_name}"
   description = "Command to access VM console"
 }
 

@@ -1,0 +1,8 @@
+---
+create_users:
+    - ubuntu
+    
+git_user:
+    - dell
+copy_local_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+
